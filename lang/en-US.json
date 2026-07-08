@@ -1,0 +1,77 @@
+{
+  "languageTag": "en-US",
+  "text": {
+    "effects": {
+      "gpt5_cloudsbackground": {
+        "name": "Clouds Background (WebGPU)",
+        "description": "Procedural drifting clouds with adjustable density, scale, wind and opacity. WebGL+WebGPU. Uses layout-space so it scrolls with the camera.",
+        "parameters": {
+          "opacity": {
+            "name": "Opacity",
+            "desc": "Cloud overlay opacity."
+          },
+          "density": {
+            "name": "Density",
+            "desc": "Cloud coverage/density."
+          },
+          "scale": {
+            "name": "Scale",
+            "desc": "Cloud scale (bigger/smaller features)."
+          },
+          "speedX": {
+            "name": "Wind X (px/s)",
+            "desc": "Horizontal drift speed in pixels per second."
+          },
+          "speedY": {
+            "name": "Wind Y (px/s)",
+            "desc": "Vertical drift speed in pixels per second."
+          },
+          "contrast": {
+            "name": "Contrast",
+            "desc": "Cloud contrast/definition."
+          },
+          "softness": {
+            "name": "Softness",
+            "desc": "Softness of cloud edges."
+          },
+          "skyTint": {
+            "name": "Sky tint",
+            "desc": "How much sky gradient tints the clouds."
+          },
+          "skyTop": {
+            "name": "Sky top color",
+            "desc": "Sky color at the top."
+          },
+          "skyBottom": {
+            "name": "Sky bottom color",
+            "desc": "Sky color at the bottom."
+          },
+          "mask": {
+            "name": "Mask by transparency",
+            "desc": "0 = ignore (full rect). 100 = render only where the layer/object is transparent."
+          },
+          "seed": {
+            "name": "Seed",
+            "desc": "Random seed offset."
+          },
+          "bob": {
+            "name": "Bob (vertical)",
+            "desc": "Small sinusoidal vertical bobbing amount."
+          },
+          "drift": {
+            "name": "Drift",
+            "desc": "Controls overall cloud drift amount (project-compat)."
+          },
+          "maskInv": {
+            "name": "Mask invert (legacy)",
+            "desc": "Legacy invert parameter kept for backward compatibility."
+          },
+          "maskinv": {
+            "name": "Mask invert",
+            "desc": "0 = render on transparent pixels, 100% = render on opaque pixels (when Mask is enabled)."
+          }
+        }
+      }
+    }
+  }
+}
