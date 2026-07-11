@@ -67,7 +67,8 @@ void main(void){
     vec2 layoutPos = mix(layoutStart, layoutEnd, n);
     vec2 wind = vec2(uSpeedX, uSpeedY) * seconds;
     float bob = sin(seconds * 0.35 + uSeed * 3.1) * (1.5 * clamp(uBob, 0.0, 1.0));
-    vec2 uv = (layoutPos + wind + vec2(0.0, bob)) * (0.0016 * max(uScale, 0.05)) + vec2(uSeed);
+    float featureScale = max(uScale, 0.05);
+    vec2 uv = (layoutPos + wind + vec2(0.0, bob)) * (0.0016 / featureScale) + vec2(uSeed);
     float drift = mix(0.002, 0.02, clamp(uDrift, 0.0, 1.0));
     vec2 t = vec2(seconds * drift, 0.0);
     float q = fbm(uv * 0.5 - t);
