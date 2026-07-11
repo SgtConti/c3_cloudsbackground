@@ -19,7 +19,7 @@ Construct 3 effect addon for procedural drifting cloud backgrounds. It supports 
 |---|---|
 | Opacity | Cloud overlay opacity. |
 | Density | Cloud coverage. |
-| Scale | Cloud feature scale. |
+| Scale | Cloud feature size. `1` = normal, `2` = twice as large, `0.5` = half size. |
 | Wind X | Horizontal drift speed in pixels per second. |
 | Wind Y | Vertical drift speed in pixels per second. |
 | Drift | Internal cloud evolution speed. |
