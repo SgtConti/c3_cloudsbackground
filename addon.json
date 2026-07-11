@@ -4,32 +4,133 @@
   "type": "effect",
   "name": "Clouds Background",
   "id": "sgtconti_clouds_background",
-  "version": "1.1.0.5",
+  "version": "1.1.0.6",
   "author": "SgtConti",
   "website": "https://github.com/SgtConti/c3_cloudsbackground",
   "documentation": "https://github.com/SgtConti/c3_cloudsbackground",
   "description": "Procedural drifting cloud background with adjustable density, scale, wind, sky tint and opacity. Supports WebGL and WebGPU.",
   "category": "other",
-  "supported-renderers": ["webgl", "webgpu"],
+  "supported-renderers": [
+    "webgl",
+    "webgpu"
+  ],
   "blends-background": true,
   "must-predraw": true,
   "animated": true,
   "preserves-opaqueness": false,
   "parameters": [
-    {"id": "opacity", "type": "percent", "initial-value": 0.45, "uniform": "uOpacity", "interpolatable": true},
-    {"id": "density", "type": "percent", "initial-value": 0.55, "uniform": "uDensity", "interpolatable": true},
-    {"id": "cloudScale", "type": "float", "initial-value": 1.1, "uniform": "uCloudScale", "interpolatable": true},
-    {"id": "speedX", "type": "float", "initial-value": 60, "uniform": "uSpeedX", "interpolatable": true},
-    {"id": "speedY", "type": "float", "initial-value": 0, "uniform": "uSpeedY", "interpolatable": true},
-    {"id": "drift", "type": "percent", "initial-value": 0.15, "uniform": "uDrift", "interpolatable": true},
-    {"id": "bob", "type": "percent", "initial-value": 0.15, "uniform": "uBob", "interpolatable": true},
-    {"id": "contrast", "type": "percent", "initial-value": 0.55, "uniform": "uContrast", "interpolatable": true},
-    {"id": "softness", "type": "percent", "initial-value": 0.55, "uniform": "uSoftness", "interpolatable": true},
-    {"id": "skyTint", "type": "percent", "initial-value": 0.5, "uniform": "uSkyTint", "interpolatable": true},
-    {"id": "skyTop", "type": "color", "initial-value": [0.4, 0.7, 1], "uniform": "uSkyTop", "interpolatable": true},
-    {"id": "skyBottom", "type": "color", "initial-value": [0.2, 0.4, 0.6], "uniform": "uSkyBottom", "interpolatable": true},
-    {"id": "mask", "type": "percent", "initial-value": 0, "uniform": "uMask", "interpolatable": true},
-    {"id": "seed", "type": "float", "initial-value": 0, "uniform": "uSeed", "interpolatable": true}
+    {
+      "id": "opacity",
+      "type": "percent",
+      "initial-value": 0.45,
+      "uniform": "uOpacity",
+      "interpolatable": true
+    },
+    {
+      "id": "density",
+      "type": "percent",
+      "initial-value": 0.45,
+      "uniform": "uDensity",
+      "interpolatable": true
+    },
+    {
+      "id": "cloudScale",
+      "type": "float",
+      "initial-value": 1.1,
+      "uniform": "uCloudScale",
+      "interpolatable": true
+    },
+    {
+      "id": "speedX",
+      "type": "float",
+      "initial-value": 60,
+      "uniform": "uSpeedX",
+      "interpolatable": true
+    },
+    {
+      "id": "speedY",
+      "type": "float",
+      "initial-value": 0,
+      "uniform": "uSpeedY",
+      "interpolatable": true
+    },
+    {
+      "id": "drift",
+      "type": "percent",
+      "initial-value": 0.15,
+      "uniform": "uDrift",
+      "interpolatable": true
+    },
+    {
+      "id": "bob",
+      "type": "percent",
+      "initial-value": 0.15,
+      "uniform": "uBob",
+      "interpolatable": true
+    },
+    {
+      "id": "contrast",
+      "type": "percent",
+      "initial-value": 0.55,
+      "uniform": "uContrast",
+      "interpolatable": true
+    },
+    {
+      "id": "softness",
+      "type": "percent",
+      "initial-value": 0.55,
+      "uniform": "uSoftness",
+      "interpolatable": true
+    },
+    {
+      "id": "skyTint",
+      "type": "percent",
+      "initial-value": 0.5,
+      "uniform": "uSkyTint",
+      "interpolatable": true
+    },
+    {
+      "id": "mask",
+      "type": "percent",
+      "initial-value": 0,
+      "uniform": "uMask",
+      "interpolatable": true
+    },
+    {
+      "id": "seed",
+      "type": "float",
+      "initial-value": 0,
+      "uniform": "uSeed",
+      "interpolatable": true
+    },
+    {
+      "id": "skyTop",
+      "type": "color",
+      "initial-value": [
+        0.4,
+        0.7,
+        1
+      ],
+      "uniform": "uSkyTop",
+      "interpolatable": true
+    },
+    {
+      "id": "skyBottom",
+      "type": "color",
+      "initial-value": [
+        0.2,
+        0.4,
+        0.6
+      ],
+      "uniform": "uSkyBottom",
+      "interpolatable": true
+    }
   ],
-  "file-list": ["addon.json", "effect.fx", "effect.wgsl", "icon.svg", "lang/en-US.json"]
+  "file-list": [
+    "addon.json",
+    "effect.fx",
+    "effect.wgsl",
+    "icon.svg",
+    "lang/en-US.json"
+  ]
 }
