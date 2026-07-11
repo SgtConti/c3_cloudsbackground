@@ -72,7 +72,8 @@ fn main(input: FragmentInput) -> FragmentOutput {
     let layoutPos = c3_getLayoutPos(input.fragUV);
     let wind = vec2<f32>(shaderParams.speedX, shaderParams.speedY) * c3Params.seconds;
     let bob = sin(c3Params.seconds * 0.35 + shaderParams.seed * 3.1) * (1.5 * clamp(shaderParams.bob, 0.0, 1.0));
-    var uv = (layoutPos + wind + vec2<f32>(0.0, bob)) * (0.0016 * max(shaderParams.scale, 0.05)) + vec2<f32>(shaderParams.seed);
+    let featureScale = max(shaderParams.scale, 0.05);
+    var uv = (layoutPos + wind + vec2<f32>(0.0, bob)) * (0.0016 / featureScale) + vec2<f32>(shaderParams.seed);
     let drift = mix(0.002, 0.02, clamp(shaderParams.drift, 0.0, 1.0));
     let t = vec2<f32>(c3Params.seconds * drift, 0.0);
     let q = fbm(uv * 0.5 - t);
