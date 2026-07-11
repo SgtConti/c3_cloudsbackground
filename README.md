@@ -12,6 +12,7 @@ Construct 3 effect addon for procedural drifting cloud backgrounds. It supports 
 - Adjustable opacity, density, scale, wind, drift, bob, contrast, softness, sky tint and seed.
 - Optional transparent-area masking.
 - Uses layout-space coordinates so the cloud field follows layer scrolling.
+- The procedural cloud core and Scale response are restored from the original working version.
 
 ## Parameters
 
@@ -19,7 +20,7 @@ Construct 3 effect addon for procedural drifting cloud backgrounds. It supports 
 |---|---|
 | Opacity | Cloud overlay opacity. |
 | Density | Cloud coverage. |
-| Scale | Cloud feature size. `1` = normal, `2` = twice as large, `0.5` = half size. |
+| Scale | Cloud coordinate scale using the original version's behavior. |
 | Wind X | Horizontal drift speed in pixels per second. |
 | Wind Y | Vertical drift speed in pixels per second. |
 | Drift | Internal cloud evolution speed. |
