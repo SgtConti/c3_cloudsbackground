@@ -1,6 +1,4 @@
 // Clouds Background (WebGPU WGSL)
-// Scrolls with layout/camera (layout-space coordinates).
-
 %%FRAGMENTINPUT_STRUCT%%
 %%FRAGMENTOUTPUT_STRUCT%%
 %%C3PARAMS_STRUCT%%
@@ -17,11 +15,11 @@ struct ShaderParams {
     contrast: f32,
     softness: f32,
     skyTint: f32,
+    mask: f32,
+    seed: f32,
     skyTop: vec3<f32>,
     _pad0: f32,
-    skyBottom: vec3<f32>,
-    mask: f32,
-    seed: f32
+    skyBottom: vec3<f32>
 };
 
 %%SAMPLERFRONT_BINDING%% var samplerFront: sampler;
@@ -45,7 +43,7 @@ fn noise(p: vec2<f32>) -> f32 {
     let c = a - 1.0 + 2.0 * K2;
     let h = max(vec3<f32>(0.5) - vec3<f32>(dot(a, a), dot(b, b), dot(c, c)), vec3<f32>(0.0));
     let h4 = h * h * h * h;
-    let n = h4 * vec3<f32>(dot(a, hash2(i + vec2<f32>(0.0))), dot(b, hash2(i + o)), dot(c, hash2(i + vec2<f32>(1.0))));
+    let n = h4 * vec3<f32>(dot(a, hash2(i)), dot(b, hash2(i + o)), dot(c, hash2(i + vec2<f32>(1.0))));
     return dot(n, vec3<f32>(70.0));
 }
 
@@ -84,12 +82,13 @@ fn main(input: FragmentInput) -> FragmentOutput {
     let front = textureSample(textureFront, samplerFront, input.fragUV);
     let back = textureSample(textureBack, samplerBack, input.fragUV);
     let base = front + back * (1.0 - front.a);
-
+    let nrm = c3_srcOriginToNorm(input.fragUV);
     let layoutPos = c3_getLayoutPos(input.fragUV);
-    let p = c3_srcOriginToNorm(input.fragUV);
     let wind = vec2<f32>(shaderParams.speedX, shaderParams.speedY) * c3Params.seconds;
     let bob = sin(c3Params.seconds * 0.35 + shaderParams.seed * 3.1) * (0.0025 * clamp(shaderParams.bob, 0.0, 1.0));
-    let basePos = layoutPos + wind;
+    var basePos = layoutPos + wind;
+    let period = 4096.0;
+    basePos = basePos - floor(basePos / period) * period;
     let cloudScale = max(shaderParams.cloudScale, 0.01);
     var uv = (basePos * 0.0016) * (cloudScale * 1.1) + vec2<f32>(shaderParams.seed, shaderParams.seed);
     uv = uv + vec2<f32>(0.0, bob);
@@ -109,17 +108,16 @@ fn main(input: FragmentInput) -> FragmentOutput {
     let density = clamp(shaderParams.density, 0.0, 1.0);
     let contrast = mix(0.8, 2.2, clamp(shaderParams.contrast, 0.0, 1.0));
     let softness = clamp(shaderParams.softness, 0.0, 1.0);
-    let cover = mix(0.08, 0.45, density);
-    let alphaGain = mix(3.0, 10.0, density);
+    let cover = mix(-0.05, 0.28, density);
+    let alphaGain = mix(1.8, 6.2, density);
     var cloud = cover + alphaGain * f * r;
-    cloud = smooth01(cloud * contrast + c * 0.35, softness);
+    cloud = smooth01(cloud * contrast + c * 0.22, softness);
 
-    let sky = mix(shaderParams.skyTop, shaderParams.skyBottom, clamp(p.y, 0.0, 1.0));
+    let sky = mix(shaderParams.skyTop, shaderParams.skyBottom, clamp(nrm.y, 0.0, 1.0));
     let cloudCol = vec3<f32>(1.1, 1.1, 0.95) * clamp(0.55 + 0.45 * c, 0.0, 1.0);
     let result = mix(sky, clamp(shaderParams.skyTint * sky + cloudCol, vec3<f32>(0.0), vec3<f32>(1.0)), cloud);
     let mask = mix(1.0, 1.0 - front.a, clamp(shaderParams.mask, 0.0, 1.0));
     let outA = cloud * clamp(shaderParams.opacity, 0.0, 1.0) * mask;
-
     var output: FragmentOutput;
     output.color = vec4<f32>(mix(base.rgb, result, outA), max(base.a, outA));
     return output;
