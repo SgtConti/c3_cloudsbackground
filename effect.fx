@@ -6,16 +6,14 @@ precision mediump float;
 #endif
 
 varying vec2 vTex;
-
 uniform sampler2D samplerFront;
 uniform sampler2D samplerBack;
-
 uniform vec2 srcOriginStart;
 uniform vec2 srcOriginEnd;
 uniform vec2 layoutStart;
 uniform vec2 layoutEnd;
+uniform vec2 pixelSize;
 uniform float seconds;
-
 uniform float uOpacity;
 uniform float uDensity;
 uniform float uCloudScale;
@@ -26,19 +24,19 @@ uniform float uBob;
 uniform float uContrast;
 uniform float uSoftness;
 uniform float uSkyTint;
-uniform vec3 uSkyTop;
-uniform vec3 uSkyBottom;
 uniform float uMask;
 uniform float uSeed;
+uniform vec3 uSkyTop;
+uniform vec3 uSkyBottom;
 
 mat2 m = mat2(1.6, 1.2, -1.2, 1.6);
 
-vec2 hash2(vec2 p) {
+vec2 hash2(vec2 p){
     p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
     return -1.0 + 2.0 * fract(sin(p) * 43758.5453123);
 }
 
-float noise(vec2 p) {
+float noise(vec2 p){
     const float K1 = 0.366025404;
     const float K2 = 0.211324865;
     vec2 i = floor(p + (p.x + p.y) * K1);
@@ -47,14 +45,14 @@ float noise(vec2 p) {
     vec2 b = a - o + K2;
     vec2 c = a - 1.0 + 2.0 * K2;
     vec3 h = max(0.5 - vec3(dot(a, a), dot(b, b), dot(c, c)), 0.0);
-    vec3 n = h * h * h * h * vec3(dot(a, hash2(i + 0.0)), dot(b, hash2(i + o)), dot(c, hash2(i + 1.0)));
+    vec3 n = h * h * h * h * vec3(dot(a, hash2(i)), dot(b, hash2(i + o)), dot(c, hash2(i + 1.0)));
     return dot(n, vec3(70.0));
 }
 
-float fbm(vec2 n) {
+float fbm(vec2 n){
     float total = 0.0;
     float amplitude = 0.1;
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 6; i++){
         total += noise(n) * amplitude;
         n = m * n;
         amplitude *= 0.45;
@@ -62,10 +60,10 @@ float fbm(vec2 n) {
     return total;
 }
 
-float ridged(vec2 uv, float t) {
+float ridged(vec2 uv, float t){
     float r = 0.0;
     float w = 0.8;
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 7; i++){
         r += abs(w * noise(uv));
         uv = m * uv + vec2(t, 0.0);
         w *= 0.72;
@@ -73,13 +71,13 @@ float ridged(vec2 uv, float t) {
     return r;
 }
 
-float smooth01(float x, float k) {
+float smooth01(float x, float k){
     float a = mix(0.35, 0.15, k);
     float b = mix(0.85, 0.60, k);
     return smoothstep(a, b, x);
 }
 
-void main(void) {
+void main(void){
     vec2 nrm = (vTex - srcOriginStart) / max(srcOriginEnd - srcOriginStart, vec2(1e-6));
     vec2 layoutPos = mix(layoutStart, layoutEnd, nrm);
     vec2 wind = vec2(uSpeedX, uSpeedY) * seconds;
@@ -106,15 +104,14 @@ void main(void) {
     float density = clamp(uDensity, 0.0, 1.0);
     float contrast = mix(0.8, 2.2, clamp(uContrast, 0.0, 1.0));
     float softness = clamp(uSoftness, 0.0, 1.0);
-    float cover = mix(0.08, 0.45, density);
-    float alphaGain = mix(3.0, 10.0, density);
+    float cover = mix(-0.05, 0.28, density);
+    float alphaGain = mix(1.8, 6.2, density);
     float cloud = cover + alphaGain * f * r;
-    cloud = smooth01(cloud * contrast + c * 0.35, softness);
+    cloud = smooth01(cloud * contrast + c * 0.22, softness);
 
     vec3 sky = mix(uSkyTop, uSkyBottom, clamp(nrm.y, 0.0, 1.0));
     vec3 cloudCol = vec3(1.1, 1.1, 0.95) * clamp(0.55 + 0.45 * c, 0.0, 1.0);
     vec3 result = mix(sky, clamp(uSkyTint * sky + cloudCol, 0.0, 1.0), cloud);
-
     vec4 front = texture2D(samplerFront, vTex);
     vec4 back = texture2D(samplerBack, vTex);
     vec4 base = front + back * (1.0 - front.a);
