@@ -7,20 +7,62 @@
         "name": "Clouds Background",
         "description": "Procedural drifting cloud background with adjustable density, scale, wind, sky tint and opacity. Supports WebGL and WebGPU.",
         "parameters": {
-          "opacity": {"name": "Opacity", "desc": "Cloud overlay opacity."},
-          "density": {"name": "Density", "desc": "Cloud coverage."},
-          "cloudScale": {"name": "Scale", "desc": "Cloud coordinate scale using the original version's behavior."},
-          "speedX": {"name": "Wind X", "desc": "Horizontal drift speed in pixels per second."},
-          "speedY": {"name": "Wind Y", "desc": "Vertical drift speed in pixels per second."},
-          "drift": {"name": "Drift", "desc": "Internal cloud evolution speed."},
-          "bob": {"name": "Bob", "desc": "Small sinusoidal vertical bob amount."},
-          "contrast": {"name": "Contrast", "desc": "Cloud definition."},
-          "softness": {"name": "Softness", "desc": "Softness of cloud edges."},
-          "skyTint": {"name": "Sky tint", "desc": "How much the sky gradient tints the clouds."},
-          "skyTop": {"name": "Sky top color", "desc": "Top color of the sky gradient."},
-          "skyBottom": {"name": "Sky bottom color", "desc": "Bottom color of the sky gradient."},
-          "mask": {"name": "Only on transparent", "desc": "0 = full rectangle. 100 = render only where the layer/object is transparent."},
-          "seed": {"name": "Seed", "desc": "Offsets the random pattern."}
+          "opacity": {
+            "name": "Opacity",
+            "desc": "Cloud overlay opacity."
+          },
+          "density": {
+            "name": "Density",
+            "desc": "Cloud coverage. Lower values produce separated cloud patches."
+          },
+          "cloudScale": {
+            "name": "Scale",
+            "desc": "Cloud feature scale. Higher values make the cloud pattern change size clearly."
+          },
+          "speedX": {
+            "name": "Wind X",
+            "desc": "Horizontal drift speed in pixels per second."
+          },
+          "speedY": {
+            "name": "Wind Y",
+            "desc": "Vertical drift speed in pixels per second."
+          },
+          "drift": {
+            "name": "Drift",
+            "desc": "Internal cloud evolution speed."
+          },
+          "bob": {
+            "name": "Bob",
+            "desc": "Small sinusoidal vertical bob amount."
+          },
+          "contrast": {
+            "name": "Contrast",
+            "desc": "Cloud definition."
+          },
+          "softness": {
+            "name": "Softness",
+            "desc": "Softness of cloud edges."
+          },
+          "skyTint": {
+            "name": "Sky tint",
+            "desc": "How much the sky gradient tints the clouds."
+          },
+          "skyTop": {
+            "name": "Sky top color",
+            "desc": "Top color of the sky gradient."
+          },
+          "skyBottom": {
+            "name": "Sky bottom color",
+            "desc": "Bottom color of the sky gradient."
+          },
+          "mask": {
+            "name": "Only on transparent",
+            "desc": "0 = full rectangle. 100 = render only where the layer/object is transparent."
+          },
+          "seed": {
+            "name": "Seed",
+            "desc": "Offsets the random pattern."
+          }
         }
       }
     }
