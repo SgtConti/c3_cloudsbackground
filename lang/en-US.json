@@ -9,7 +9,7 @@
         "parameters": {
           "opacity": {"name": "Opacity", "desc": "Cloud overlay opacity."},
           "density": {"name": "Density", "desc": "Cloud coverage."},
-          "scale": {"name": "Scale", "desc": "Cloud feature scale."},
+          "scale": {"name": "Scale", "desc": "Cloud feature size. 1 = normal, 2 = twice as large, 0.5 = half size."},
           "speedX": {"name": "Wind X", "desc": "Horizontal drift speed in pixels per second."},
           "speedY": {"name": "Wind Y", "desc": "Vertical drift speed in pixels per second."},
           "drift": {"name": "Drift", "desc": "Internal cloud evolution speed."},
