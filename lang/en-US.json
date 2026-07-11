@@ -20,6 +20,8 @@
           "skyTop": {"name": "Sky top color", "desc": "Top color of the sky gradient."},
           "skyBottom": {"name": "Sky bottom color", "desc": "Bottom color of the sky gradient."},
           "mask": {"name": "Only on transparent", "desc": "0 = full rectangle. 100 = render only where the layer/object is transparent."},
+          "maskInv": {"name": "Legacy mask A", "desc": "Compatibility parameter retained from the original version."},
+          "maskinv": {"name": "Legacy mask B", "desc": "Compatibility parameter retained from the original version."},
           "seed": {"name": "Seed", "desc": "Offsets the random pattern."}
         }
       }
