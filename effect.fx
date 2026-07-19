@@ -83,8 +83,6 @@ void main(void){
     vec2 wind = vec2(uSpeedX, uSpeedY) * seconds;
     float bob = sin(seconds * 0.35 + uSeed * 3.1) * (0.0025 * clamp(uBob, 0.0, 1.0));
     vec2 basePos = layoutPos + wind;
-    const float PERIOD = 4096.0;
-    basePos = basePos - floor(basePos / PERIOD) * PERIOD;
     float cloudScale = max(uCloudScale, 0.01);
     vec2 uv = (basePos * 0.0016) * (cloudScale * 1.1) + vec2(uSeed, uSeed);
     uv.y += bob;
