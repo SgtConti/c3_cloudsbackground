@@ -2,6 +2,16 @@
 
 Construct 3 effect addon for procedural drifting cloud backgrounds. It supports both WebGL and WebGPU and is intended for object or layer use.
 
+## Install
+
+Download [`dist/sgtconti_clouds_background-1.2.0.0.c3addon`](dist/sgtconti_clouds_background-1.2.0.0.c3addon)
+(use the **Download raw file** button), then in Construct 3 open *Menu → View →
+Addon Manager → Install new addon* and pick the file. Reload the editor when prompted.
+
+Tagged builds are also attached to [Releases](../../releases), and every push
+produces the same package as a CI artifact under the
+[Package c3addon workflow](../../actions/workflows/package.yml).
+
 ## Addon ID
 
 `sgtconti_clouds_background`
