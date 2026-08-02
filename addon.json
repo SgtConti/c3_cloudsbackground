@@ -4,11 +4,11 @@
   "type": "effect",
   "name": "Clouds Background",
   "id": "sgtconti_clouds_background",
-  "version": "1.1.0.7",
+  "version": "1.2.0.0",
   "author": "SgtConti",
   "website": "https://github.com/SgtConti/c3_cloudsbackground",
   "documentation": "https://github.com/SgtConti/c3_cloudsbackground",
-  "description": "Procedural drifting cloud background with adjustable density, scale, wind, sky tint and opacity. Supports WebGL and WebGPU.",
+  "description": "Procedural drifting cloud background with four cloud types (cumulus, altostratus, cirrus, cumulonimbus) and adjustable density, scale, wind, sky tint and opacity. Supports WebGL and WebGPU.",
   "category": "other",
   "supported-renderers": [
     "webgl",
@@ -124,6 +124,13 @@
       ],
       "uniform": "uSkyBottom",
       "interpolatable": true
+    },
+    {
+      "id": "cloudType",
+      "type": "float",
+      "initial-value": 0,
+      "uniform": "uCloudType",
+      "interpolatable": false
     }
   ],
   "file-list": [

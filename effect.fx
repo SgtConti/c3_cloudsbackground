@@ -28,6 +28,7 @@ uniform float uMask;
 uniform float uSeed;
 uniform vec3 uSkyTop;
 uniform vec3 uSkyBottom;
+uniform float uCloudType;
 
 mat2 m = mat2(1.6, 1.2, -1.2, 1.6);
 
@@ -71,13 +72,21 @@ float ridged(vec2 uv, float t){
     return r;
 }
 
-float smooth01(float x, float k){
-    float a = mix(0.35, 0.15, k);
-    float b = mix(0.85, 0.60, k);
-    return smoothstep(a, b, x);
-}
-
 void main(void){
+    vec4 front = texture2D(samplerFront, vTex);
+    vec4 back = texture2D(samplerBack, vTex);
+    vec4 base = front + back * (1.0 - front.a);
+
+    // Nothing the cloud field produces can survive this, so skip it entirely.
+    // Matters most with "Only on transparent" turned up, where the covered part
+    // of the screen would otherwise pay for a cloud it then throws away.
+    float mask = mix(1.0, 1.0 - front.a, clamp(uMask, 0.0, 1.0));
+    float visible = clamp(uOpacity, 0.0, 1.0) * mask;
+    if (visible < 0.002){
+        gl_FragColor = base;
+        return;
+    }
+
     vec2 nrm = (vTex - srcOriginStart) / max(srcOriginEnd - srcOriginStart, vec2(1e-6));
     vec2 layoutPos = mix(layoutStart, layoutEnd, nrm);
     vec2 wind = vec2(uSpeedX, uSpeedY) * seconds;
@@ -87,33 +96,128 @@ void main(void){
     vec2 uv = (basePos * 0.0016) * (cloudScale * 1.1) + vec2(uSeed, uSeed);
     uv.y += bob;
 
-    float drift = mix(0.002, 0.02, clamp(uDrift, 0.0, 1.0));
-    float time = seconds * drift;
-    vec2 timeVec = vec2(time, 0.0);
-    float q = fbm(uv * 0.5 - timeVec);
-    vec2 sh = uv - vec2(q, q) + timeVec;
-    float r = ridged(sh, time);
-    float f = fbm(sh) * 0.9;
-    f *= (r + f);
-    float c = fbm(uv * 2.0 - timeVec * 2.0);
-    float c1 = ridged(uv * 3.0 - timeVec * 3.0, time * 0.7);
-    c += 0.6 * c1;
-
     float density = clamp(uDensity, 0.0, 1.0);
-    float contrast = mix(0.8, 2.2, clamp(uContrast, 0.0, 1.0));
     float softness = clamp(uSoftness, 0.0, 1.0);
-    float cover = mix(-0.05, 0.28, density);
-    float alphaGain = mix(1.8, 6.2, density);
-    float cloud = cover + alphaGain * f * r;
-    cloud = smooth01(cloud * contrast + c * 0.22, softness);
+    float contrastN = clamp(uContrast, 0.0, 1.0);
+    float driftN = clamp(uDrift, 0.0, 1.0);
+    float up = 1.0 - clamp(nrm.y, 0.0, 1.0);
+    float ct = floor(clamp(uCloudType, 0.0, 3.0) + 0.5);
+
+    // All four cloud types run one shared noise pipeline and differ only in how
+    // the domain is shaped and how the result is read. Keeping the expensive
+    // part branch-free means no duplicated noise work, no extra register
+    // pressure, and no dependence on the driver folding uniform branches.
+    vec2 stretch = vec2(1.0);       // domain anisotropy
+    vec2 warpVec = vec2(-1.0);      // how the warp field displaces the domain
+    vec2 ridgeScale = vec2(1.0);    // extra anisotropy for the turbulence term
+    float qScale = 0.5;
+    float driftLo = 0.002;
+    float driftHi = 0.02;
+    float needDetail = 1.0;         // the fine-detail pair is only used by 0 and 3
+
+    if (ct > 0.5 && ct < 1.5){
+        stretch = vec2(0.55, 3.2);
+        warpVec = vec2(-0.5);
+        ridgeScale = vec2(1.6, 0.7);
+        driftLo = 0.0012;
+        driftHi = 0.012;
+        needDetail = 0.0;
+    } else if (ct > 1.5 && ct < 2.5){
+        stretch = vec2(0.62, 3.6);
+        warpVec = vec2(2.4, -0.5);
+        ridgeScale = vec2(2.2, 1.0);
+        qScale = 0.6;
+        driftLo = 0.0015;
+        driftHi = 0.015;
+        needDetail = 0.0;
+    } else if (ct > 2.5){
+        stretch = vec2(0.80, 0.52);
+        driftLo = 0.003;
+        driftHi = 0.028;
+    }
+
+    float time = seconds * mix(driftLo, driftHi, driftN);
+    vec2 timeVec = vec2(time, 0.0);
+    vec2 p = uv * stretch;
+    float q = fbm(p * qScale - timeVec);
+    vec2 sh = p + warpVec * q + timeVec;
+    float r = ridged(sh * ridgeScale, time);
+    float f = fbm(sh);
+
+    // Sheets and wisps have no billowing interior to describe, so they skip the
+    // fine-detail pair and cost two of the five noise evaluations less.
+    float c = 0.0;
+    if (needDetail > 0.5){
+        c = fbm(p * 2.0 - timeVec * 2.0) + 0.6 * ridged(p * 3.0 - timeVec * 3.0, time * 0.7);
+    }
 
     vec3 sky = mix(uSkyTop, uSkyBottom, clamp(nrm.y, 0.0, 1.0));
-    vec3 cloudCol = vec3(1.1, 1.1, 0.95) * clamp(0.55 + 0.45 * c, 0.0, 1.0);
-    vec3 result = mix(sky, clamp(uSkyTint * sky + cloudCol, 0.0, 1.0), cloud);
-    vec4 front = texture2D(samplerFront, vTex);
-    vec4 back = texture2D(samplerBack, vTex);
-    vec4 base = front + back * (1.0 - front.a);
-    float mask = mix(1.0, 1.0 - front.a, clamp(uMask, 0.0, 1.0));
-    float outA = cloud * clamp(uOpacity, 0.0, 1.0) * mask;
+    float tintAmt = clamp(uSkyTint, 0.0, 1.0);
+    float cloud = 0.0;
+    vec3 cloudCol = vec3(1.0);
+
+    if (ct < 0.5){
+        // --- 0: Cumulus -----------------------------------------------------
+        // Broken puffs over open sky. Unchanged from the original effect.
+        float ff = f * 0.9;
+        ff *= (r + ff);
+        float contrast = mix(0.8, 2.2, contrastN);
+        float cover = mix(-0.05, 0.28, density);
+        float alphaGain = mix(1.8, 6.2, density);
+        cloud = smoothstep(mix(0.35, 0.15, softness), mix(0.85, 0.60, softness),
+                           (cover + alphaGain * ff * r) * contrast + c * 0.22);
+        cloudCol = vec3(1.1, 1.1, 0.95) * clamp(0.55 + 0.45 * c, 0.0, 1.0);
+    } else if (ct < 1.5){
+        // --- 1: Altostratus -------------------------------------------------
+        // A closed grey sheet in wide flat layers with no defined cloud edges.
+        // Density sets how much light gets through rather than how much of the
+        // sky is covered, so the variation stays tonal instead of punching holes.
+        float grain = r - 0.63;
+        float contrast = mix(0.5, 1.7, contrastN);
+        float edge = mix(0.60, 0.24, softness);
+        float thin = clamp((f * 5.0 + grain * 0.30) * contrast, -1.5, 1.5);
+        float floorA = mix(0.32, 1.0, sqrt(density));
+        cloud = clamp(floorA + (1.0 - floorA) * smoothstep(-edge, edge, thin), 0.0, 1.0);
+        cloudCol = vec3(0.80, 0.81, 0.84) * clamp(0.72 + 1.5 * f + 0.16 * grain, 0.0, 1.0);
+        tintAmt *= 0.30;    // overcast reads grey, not sky-coloured
+    } else if (ct < 2.5){
+        // --- 2: Cirrus ------------------------------------------------------
+        // Sparse fibrous streaks high in the frame, drawn out along the wind.
+        float cover = mix(-0.040, 0.050, density);
+        float env = clamp((f - 0.016 + cover) * 22.0, 0.0, 1.0);
+        // A power curve leaves the streak ends feathered instead of cut off.
+        // Blending env^3 towards env gets the same falloff without a pow().
+        env = mix(env * env * env, env, softness);
+        float fibre = clamp((r - 0.45) * mix(0.9, 1.9, contrastN), 0.0, 1.0);
+        float high = mix(0.72, 1.0, smoothstep(0.95, 0.15, nrm.y));
+        cloud = env * mix(0.30, 1.0, fibre) * 0.85 * high;
+        cloudCol = vec3(1.16, 1.16, 1.14) * clamp(0.80 + 6.0 * f + 0.15 * fibre, 0.0, 1.0);
+    } else {
+        // --- 3: Cumulonimbus ------------------------------------------------
+        // A tall billowing mass: lit crown, anvil spreading across the top of
+        // the frame, shadowed interior and a dark flat base.
+        float ff = f * 0.95;
+        ff *= (r + ff);
+        float anvil = smoothstep(0.70, 1.0, up);
+        float body = smoothstep(0.0, 0.34, up);
+        float contrast = mix(1.1, 2.6, contrastN) * mix(1.0, 0.68, anvil);
+        float cover = mix(-0.12, 0.32, density) + 0.18 * anvil - 0.22 * (1.0 - body);
+        float alphaGain = mix(2.4, 5.4, density);
+        float dens = cover + alphaGain * ff * r;
+        cloud = smoothstep(mix(0.32, 0.14, softness), mix(0.78, 0.52, softness), dens * contrast + c * 0.18);
+        cloud *= mix(0.35, 1.0, body);
+
+        // Volume shading for free: the warp field q is already low frequency, so
+        // it doubles as a broad light/shadow mask, while dens darkens thick
+        // interiors and the base.
+        float thick = smoothstep(0.02, 0.55, dens);
+        float shadow = smoothstep(-0.03, 0.055, q);
+        float lit = clamp(0.38 + 0.30 * c - 0.60 * thick - 0.42 * shadow + 0.42 * up, 0.0, 1.0);
+        cloudCol = mix(vec3(0.26, 0.29, 0.37), vec3(1.06, 1.05, 1.00), lit);
+        tintAmt *= mix(0.35, 1.0, lit);
+    }
+
+    vec3 result = mix(sky, clamp(tintAmt * sky + cloudCol, 0.0, 1.0), cloud);
+    float outA = cloud * visible;
     gl_FragColor = vec4(mix(base.rgb, result, outA), max(base.a, outA));
 }
