@@ -19,7 +19,8 @@ struct ShaderParams {
     seed: f32,
     skyTop: vec3<f32>,
     _pad0: f32,
-    skyBottom: vec3<f32>
+    skyBottom: vec3<f32>,
+    cloudType: f32
 };
 
 %%SAMPLERFRONT_BINDING%% var samplerFront: sampler;
@@ -27,6 +28,13 @@ struct ShaderParams {
 %%SAMPLERBACK_BINDING%% var samplerBack: sampler;
 %%TEXTUREBACK_BINDING%% var textureBack: texture_2d<f32>;
 %%SHADERPARAMS_BINDING%% var<uniform> shaderParams: ShaderParams;
+
+// Matches the GLSL `mat2 m = mat2(1.6, 1.2, -1.2, 1.6)` multiply. GLSL builds
+// that matrix column by column, so writing the product out by hand here keeps
+// the WebGPU cloud field identical to the WebGL one.
+fn rot(p: vec2<f32>) -> vec2<f32> {
+    return vec2<f32>(1.6 * p.x - 1.2 * p.y, 1.2 * p.x + 1.6 * p.y);
+}
 
 fn hash2(p: vec2<f32>) -> vec2<f32> {
     let q = vec2<f32>(dot(p, vec2<f32>(127.1, 311.7)), dot(p, vec2<f32>(269.5, 183.3)));
@@ -53,7 +61,7 @@ fn fbm(p0: vec2<f32>) -> f32 {
     var amp = 0.1;
     for (var i: i32 = 0; i < 6; i = i + 1) {
         total = total + noise(p) * amp;
-        p = vec2<f32>(1.6 * p.x + 1.2 * p.y, -1.2 * p.x + 1.6 * p.y);
+        p = rot(p);
         amp = amp * 0.45;
     }
     return total;
@@ -65,16 +73,10 @@ fn ridged(uv0: vec2<f32>, t: f32) -> f32 {
     var w = 0.8;
     for (var i: i32 = 0; i < 7; i = i + 1) {
         r = r + abs(w * noise(uv));
-        uv = vec2<f32>(1.6 * uv.x + 1.2 * uv.y, -1.2 * uv.x + 1.6 * uv.y) + vec2<f32>(t, 0.0);
+        uv = rot(uv) + vec2<f32>(t, 0.0);
         w = w * 0.72;
     }
     return r;
-}
-
-fn smooth01(x: f32, k: f32) -> f32 {
-    let a = mix(0.35, 0.15, k);
-    let b = mix(0.85, 0.60, k);
-    return smoothstep(a, b, x);
 }
 
 @fragment
@@ -82,6 +84,18 @@ fn main(input: FragmentInput) -> FragmentOutput {
     let front = textureSample(textureFront, samplerFront, input.fragUV);
     let back = textureSample(textureBack, samplerBack, input.fragUV);
     let base = front + back * (1.0 - front.a);
+    var output: FragmentOutput;
+
+    // Nothing the cloud field produces can survive this, so skip it entirely.
+    // Matters most with "Only on transparent" turned up, where the covered part
+    // of the screen would otherwise pay for a cloud it then throws away.
+    let mask = mix(1.0, 1.0 - front.a, clamp(shaderParams.mask, 0.0, 1.0));
+    let visible = clamp(shaderParams.opacity, 0.0, 1.0) * mask;
+    if (visible < 0.002) {
+        output.color = base;
+        return output;
+    }
+
     let nrm = c3_srcOriginToNorm(input.fragUV);
     let layoutPos = c3_getLayoutPos(input.fragUV);
     let wind = vec2<f32>(shaderParams.speedX, shaderParams.speedY) * c3Params.seconds;
@@ -91,32 +105,129 @@ fn main(input: FragmentInput) -> FragmentOutput {
     var uv = (basePos * 0.0016) * (cloudScale * 1.1) + vec2<f32>(shaderParams.seed, shaderParams.seed);
     uv = uv + vec2<f32>(0.0, bob);
 
-    let drift = mix(0.002, 0.02, clamp(shaderParams.drift, 0.0, 1.0));
-    let time = c3Params.seconds * drift;
-    let timeVec = vec2<f32>(time, 0.0);
-    let q = fbm(uv * 0.5 - timeVec);
-    let sh = uv - vec2<f32>(q, q) + timeVec;
-    let r = ridged(sh, time);
-    var f = fbm(sh) * 0.9;
-    f = f * (r + f);
-    let c0 = fbm(uv * 2.0 - timeVec * 2.0);
-    let c1 = ridged(uv * 3.0 - timeVec * 3.0, time * 0.7);
-    let c = c0 + 0.6 * c1;
-
     let density = clamp(shaderParams.density, 0.0, 1.0);
-    let contrast = mix(0.8, 2.2, clamp(shaderParams.contrast, 0.0, 1.0));
     let softness = clamp(shaderParams.softness, 0.0, 1.0);
-    let cover = mix(-0.05, 0.28, density);
-    let alphaGain = mix(1.8, 6.2, density);
-    var cloud = cover + alphaGain * f * r;
-    cloud = smooth01(cloud * contrast + c * 0.22, softness);
+    let contrastN = clamp(shaderParams.contrast, 0.0, 1.0);
+    let driftN = clamp(shaderParams.drift, 0.0, 1.0);
+    let up = 1.0 - clamp(nrm.y, 0.0, 1.0);
+    let ct = floor(clamp(shaderParams.cloudType, 0.0, 3.0) + 0.5);
+
+    // All four cloud types run one shared noise pipeline and differ only in how
+    // the domain is shaped and how the result is read. Keeping the expensive
+    // part branch-free means no duplicated noise work, no extra register
+    // pressure, and no dependence on the driver folding uniform branches.
+    var stretch = vec2<f32>(1.0);       // domain anisotropy
+    var warpVec = vec2<f32>(-1.0);      // how the warp field displaces the domain
+    var ridgeScale = vec2<f32>(1.0);    // extra anisotropy for the turbulence term
+    var qScale = 0.5;
+    var driftLo = 0.002;
+    var driftHi = 0.02;
+    var needDetail = 1.0;               // the fine-detail pair is only used by 0 and 3
+
+    if (ct > 0.5 && ct < 1.5) {
+        stretch = vec2<f32>(0.55, 3.2);
+        warpVec = vec2<f32>(-0.5);
+        ridgeScale = vec2<f32>(1.6, 0.7);
+        driftLo = 0.0012;
+        driftHi = 0.012;
+        needDetail = 0.0;
+    } else if (ct > 1.5 && ct < 2.5) {
+        stretch = vec2<f32>(0.62, 3.6);
+        warpVec = vec2<f32>(2.4, -0.5);
+        ridgeScale = vec2<f32>(2.2, 1.0);
+        qScale = 0.6;
+        driftLo = 0.0015;
+        driftHi = 0.015;
+        needDetail = 0.0;
+    } else if (ct > 2.5) {
+        stretch = vec2<f32>(0.80, 0.52);
+        driftLo = 0.003;
+        driftHi = 0.028;
+    }
+
+    let time = c3Params.seconds * mix(driftLo, driftHi, driftN);
+    let timeVec = vec2<f32>(time, 0.0);
+    let p = uv * stretch;
+    let q = fbm(p * qScale - timeVec);
+    let sh = p + warpVec * q + timeVec;
+    let r = ridged(sh * ridgeScale, time);
+    let f = fbm(sh);
+
+    // Sheets and wisps have no billowing interior to describe, so they skip the
+    // fine-detail pair and cost two of the five noise evaluations less.
+    var c = 0.0;
+    if (needDetail > 0.5) {
+        c = fbm(p * 2.0 - timeVec * 2.0) + 0.6 * ridged(p * 3.0 - timeVec * 3.0, time * 0.7);
+    }
 
     let sky = mix(shaderParams.skyTop, shaderParams.skyBottom, clamp(nrm.y, 0.0, 1.0));
-    let cloudCol = vec3<f32>(1.1, 1.1, 0.95) * clamp(0.55 + 0.45 * c, 0.0, 1.0);
-    let result = mix(sky, clamp(shaderParams.skyTint * sky + cloudCol, vec3<f32>(0.0), vec3<f32>(1.0)), cloud);
-    let mask = mix(1.0, 1.0 - front.a, clamp(shaderParams.mask, 0.0, 1.0));
-    let outA = cloud * clamp(shaderParams.opacity, 0.0, 1.0) * mask;
-    var output: FragmentOutput;
+    var tintAmt = clamp(shaderParams.skyTint, 0.0, 1.0);
+    var cloud = 0.0;
+    var cloudCol = vec3<f32>(1.0);
+
+    if (ct < 0.5) {
+        // --- 0: Cumulus -----------------------------------------------------
+        // Broken puffs over open sky. Unchanged from the original effect.
+        var ff = f * 0.9;
+        ff = ff * (r + ff);
+        let contrast = mix(0.8, 2.2, contrastN);
+        let cover = mix(-0.05, 0.28, density);
+        let alphaGain = mix(1.8, 6.2, density);
+        cloud = smoothstep(mix(0.35, 0.15, softness), mix(0.85, 0.60, softness),
+                           (cover + alphaGain * ff * r) * contrast + c * 0.22);
+        cloudCol = vec3<f32>(1.1, 1.1, 0.95) * clamp(0.55 + 0.45 * c, 0.0, 1.0);
+    } else if (ct < 1.5) {
+        // --- 1: Altostratus -------------------------------------------------
+        // A closed grey sheet in wide flat layers with no defined cloud edges.
+        // Density sets how much light gets through rather than how much of the
+        // sky is covered, so the variation stays tonal instead of punching holes.
+        let grain = r - 0.63;
+        let contrast = mix(0.5, 1.7, contrastN);
+        let edge = mix(0.60, 0.24, softness);
+        let thin = clamp((f * 5.0 + grain * 0.30) * contrast, -1.5, 1.5);
+        let floorA = mix(0.32, 1.0, sqrt(density));
+        cloud = clamp(floorA + (1.0 - floorA) * smoothstep(-edge, edge, thin), 0.0, 1.0);
+        cloudCol = vec3<f32>(0.80, 0.81, 0.84) * clamp(0.72 + 1.5 * f + 0.16 * grain, 0.0, 1.0);
+        tintAmt = tintAmt * 0.30;   // overcast reads grey, not sky-coloured
+    } else if (ct < 2.5) {
+        // --- 2: Cirrus ------------------------------------------------------
+        // Sparse fibrous streaks high in the frame, drawn out along the wind.
+        let cover = mix(-0.040, 0.050, density);
+        var env = clamp((f - 0.016 + cover) * 22.0, 0.0, 1.0);
+        // A power curve leaves the streak ends feathered instead of cut off.
+        // Blending env^3 towards env gets the same falloff without a pow().
+        env = mix(env * env * env, env, softness);
+        let fibre = clamp((r - 0.45) * mix(0.9, 1.9, contrastN), 0.0, 1.0);
+        let high = mix(0.72, 1.0, smoothstep(0.95, 0.15, nrm.y));
+        cloud = env * mix(0.30, 1.0, fibre) * 0.85 * high;
+        cloudCol = vec3<f32>(1.16, 1.16, 1.14) * clamp(0.80 + 6.0 * f + 0.15 * fibre, 0.0, 1.0);
+    } else {
+        // --- 3: Cumulonimbus ------------------------------------------------
+        // A tall billowing mass: lit crown, anvil spreading across the top of
+        // the frame, shadowed interior and a dark flat base.
+        var ff = f * 0.95;
+        ff = ff * (r + ff);
+        let anvil = smoothstep(0.70, 1.0, up);
+        let body = smoothstep(0.0, 0.34, up);
+        let contrast = mix(1.1, 2.6, contrastN) * mix(1.0, 0.68, anvil);
+        let cover = mix(-0.12, 0.32, density) + 0.18 * anvil - 0.22 * (1.0 - body);
+        let alphaGain = mix(2.4, 5.4, density);
+        let dens = cover + alphaGain * ff * r;
+        cloud = smoothstep(mix(0.32, 0.14, softness), mix(0.78, 0.52, softness), dens * contrast + c * 0.18);
+        cloud = cloud * mix(0.35, 1.0, body);
+
+        // Volume shading for free: the warp field q is already low frequency, so
+        // it doubles as a broad light/shadow mask, while dens darkens thick
+        // interiors and the base.
+        let thick = smoothstep(0.02, 0.55, dens);
+        let shadow = smoothstep(-0.03, 0.055, q);
+        let lit = clamp(0.38 + 0.30 * c - 0.60 * thick - 0.42 * shadow + 0.42 * up, 0.0, 1.0);
+        cloudCol = mix(vec3<f32>(0.26, 0.29, 0.37), vec3<f32>(1.06, 1.05, 1.00), lit);
+        tintAmt = tintAmt * mix(0.35, 1.0, lit);
+    }
+
+    let result = mix(sky, clamp(tintAmt * sky + cloudCol, vec3<f32>(0.0), vec3<f32>(1.0)), cloud);
+    let outA = cloud * visible;
     output.color = vec4<f32>(mix(base.rgb, result, outA), max(base.a, outA));
     return output;
 }

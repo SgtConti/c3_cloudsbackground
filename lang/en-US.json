@@ -5,15 +5,19 @@
     "effects": {
       "sgtconti_clouds_background": {
         "name": "Clouds Background",
-        "description": "Procedural drifting cloud background with adjustable density, scale, wind, sky tint and opacity. Supports WebGL and WebGPU.",
+        "description": "Procedural drifting cloud background with four cloud types (cumulus, altostratus, cirrus, cumulonimbus) and adjustable density, scale, wind, sky tint and opacity. Supports WebGL and WebGPU.",
         "parameters": {
+          "cloudType": {
+            "name": "Cloud type",
+            "desc": "0 = cumulus (broken puffs), 1 = altostratus (flat grey overcast sheet), 2 = cirrus (thin high wisps), 3 = cumulonimbus (tall storm mass). Other parameters apply to whichever type is selected."
+          },
           "opacity": {
             "name": "Opacity",
             "desc": "Cloud overlay opacity."
           },
           "density": {
             "name": "Density",
-            "desc": "Cloud coverage. Lower values produce separated cloud patches."
+            "desc": "Cloud coverage. Lower values produce separated cloud patches. For altostratus the sheet always covers the sky, so this sets how much light passes through it instead."
           },
           "cloudScale": {
             "name": "Scale",
