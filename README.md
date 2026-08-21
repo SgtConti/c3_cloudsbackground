@@ -4,7 +4,7 @@ Construct 3 effect addon for procedural drifting cloud backgrounds. It supports 
 
 ## Install
 
-Download [`dist/sgtconti_clouds_background-1.2.0.0.c3addon`](dist/sgtconti_clouds_background-1.2.0.0.c3addon)
+Download [`dist/sgtconti_clouds_background-1.2.1.0.c3addon`](dist/sgtconti_clouds_background-1.2.1.0.c3addon)
 (use the **Download raw file** button), then in Construct 3 open *Menu → View →
 Addon Manager → Install new addon* and pick the file. Reload the editor when prompted.
 
@@ -82,3 +82,19 @@ for those pixels.
 
 To reduce cost further in a project: lower `Scale` (fewer, larger cloud features
 alias less), or place the effect on a layer that is not redrawn every frame.
+
+## Driver consistency
+
+The cloud field is generated from a permutation hash whose intermediates all stay
+inside the range a 32-bit float represents exactly, and whose `sin`/`cos` calls
+only ever see arguments in `[0, 2pi)`. That matters because the wind offset grows
+without bound as a layout runs, so the older `fract(sin(dot(p, k)) * 43758.5453)`
+hash ended up feeding `sin()` arguments of 1e5 immediately and 1e7 within an hour.
+GPU drivers range-reduce `sin()` very differently at that magnitude — some
+collapse it to a handful of values, which showed up on some Linux/Mesa systems as
+a static, repeating pattern with no cloud structure.
+
+The field is now bit-identical on every driver and on both renderers, and it no
+longer degrades however long a layout runs. The trade-off is that it repeats every
+289 lattice cells — roughly 150,000 layout px at the default `Scale`, far beyond
+what is visible on screen.

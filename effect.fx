@@ -32,9 +32,30 @@ uniform float uCloudType;
 
 mat2 m = mat2(1.6, 1.2, -1.2, 1.6);
 
+// Lattice hash. The usual fract(sin(dot(p, k)) * 43758.5453) needs sin() to stay
+// accurate for arguments in the millions - this field reaches 1e5 immediately and
+// 1e7 after an hour of wind - and drivers range-reduce sin() very differently
+// there. Some collapse it to a handful of values, which turns the cloud field
+// into a static repeating pattern with no structure.
+//
+// This permutation hash uses only exact float arithmetic instead. Every
+// intermediate stays under 2^24, the largest being (2*289*34 + 1) * 2*289 =
+// 1.14e7, so it is bit-identical on every GPU and driver. cos/sin only ever see
+// arguments in [0, 2pi). The cost is that the field repeats every 289 lattice
+// cells - about 150,000 layout px at the default Scale, far past what is visible.
+const float MODULUS = 289.0;
+
+float mod289(float x){ return x - floor(x * (1.0 / MODULUS)) * MODULUS; }
+vec2 mod289(vec2 x){ return x - floor(x * (1.0 / MODULUS)) * MODULUS; }
+float permute(float x){ return mod289(((x * 34.0) + 1.0) * x); }
+
 vec2 hash2(vec2 p){
-    p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
-    return -1.0 + 2.0 * fract(sin(p) * 43758.5453123);
+    vec2 pi = mod289(p);
+    float h = permute(permute(pi.x) + pi.y);
+    float a = h * (6.283185307179586 / MODULUS);
+    // 0.8165 is the RMS length of the old square-distributed gradient, so the
+    // noise keeps the amplitude every cloud type is tuned against.
+    return vec2(cos(a), sin(a)) * 0.8165;
 }
 
 float noise(vec2 p){
@@ -172,7 +193,7 @@ void main(void){
         // A closed grey sheet in wide flat layers with no defined cloud edges.
         // Density sets how much light gets through rather than how much of the
         // sky is covered, so the variation stays tonal instead of punching holes.
-        float grain = r - 0.63;
+        float grain = r - 0.698;    // 0.698 is the median of ridged()
         float contrast = mix(0.5, 1.7, contrastN);
         float edge = mix(0.60, 0.24, softness);
         float thin = clamp((f * 5.0 + grain * 0.30) * contrast, -1.5, 1.5);
@@ -188,7 +209,7 @@ void main(void){
         // A power curve leaves the streak ends feathered instead of cut off.
         // Blending env^3 towards env gets the same falloff without a pow().
         env = mix(env * env * env, env, softness);
-        float fibre = clamp((r - 0.45) * mix(0.9, 1.9, contrastN), 0.0, 1.0);
+        float fibre = clamp((r - 0.52) * mix(0.9, 1.9, contrastN), 0.0, 1.0);
         float high = mix(0.72, 1.0, smoothstep(0.95, 0.15, nrm.y));
         cloud = env * mix(0.30, 1.0, fibre) * 0.85 * high;
         cloudCol = vec3(1.16, 1.16, 1.14) * clamp(0.80 + 6.0 * f + 0.15 * fibre, 0.0, 1.0);

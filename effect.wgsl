@@ -36,9 +36,28 @@ fn rot(p: vec2<f32>) -> vec2<f32> {
     return vec2<f32>(1.6 * p.x - 1.2 * p.y, 1.2 * p.x + 1.6 * p.y);
 }
 
+// Lattice hash. The usual fract(sin(dot(p, k)) * 43758.5453) needs sin() to stay
+// accurate for arguments in the millions - this field reaches 1e5 immediately and
+// 1e7 after an hour of wind - and drivers range-reduce sin() very differently
+// there. Some collapse it to a handful of values, which turns the cloud field
+// into a static repeating pattern with no structure.
+//
+// This permutation hash uses only exact float arithmetic instead. Every
+// intermediate stays under 2^24, the largest being (2*289*34 + 1) * 2*289 =
+// 1.14e7, so it is bit-identical on every GPU and driver. cos/sin only ever see
+// arguments in [0, 2pi). The cost is that the field repeats every 289 lattice
+// cells - about 150,000 layout px at the default Scale, far past what is visible.
+fn mod289f(x: f32) -> f32 { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+fn mod289v(x: vec2<f32>) -> vec2<f32> { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+fn permute(x: f32) -> f32 { return mod289f(((x * 34.0) + 1.0) * x); }
+
 fn hash2(p: vec2<f32>) -> vec2<f32> {
-    let q = vec2<f32>(dot(p, vec2<f32>(127.1, 311.7)), dot(p, vec2<f32>(269.5, 183.3)));
-    return -1.0 + 2.0 * fract(sin(q) * 43758.5453123);
+    let pi = mod289v(p);
+    let h = permute(permute(pi.x) + pi.y);
+    let a = h * (6.283185307179586 / 289.0);
+    // 0.8165 is the RMS length of the old square-distributed gradient, so the
+    // noise keeps the amplitude every cloud type is tuned against.
+    return vec2<f32>(cos(a), sin(a)) * 0.8165;
 }
 
 fn noise(p: vec2<f32>) -> f32 {
@@ -181,7 +200,7 @@ fn main(input: FragmentInput) -> FragmentOutput {
         // A closed grey sheet in wide flat layers with no defined cloud edges.
         // Density sets how much light gets through rather than how much of the
         // sky is covered, so the variation stays tonal instead of punching holes.
-        let grain = r - 0.63;
+        let grain = r - 0.698;      // 0.698 is the median of ridged()
         let contrast = mix(0.5, 1.7, contrastN);
         let edge = mix(0.60, 0.24, softness);
         let thin = clamp((f * 5.0 + grain * 0.30) * contrast, -1.5, 1.5);
@@ -197,7 +216,7 @@ fn main(input: FragmentInput) -> FragmentOutput {
         // A power curve leaves the streak ends feathered instead of cut off.
         // Blending env^3 towards env gets the same falloff without a pow().
         env = mix(env * env * env, env, softness);
-        let fibre = clamp((r - 0.45) * mix(0.9, 1.9, contrastN), 0.0, 1.0);
+        let fibre = clamp((r - 0.52) * mix(0.9, 1.9, contrastN), 0.0, 1.0);
         let high = mix(0.72, 1.0, smoothstep(0.95, 0.15, nrm.y));
         cloud = env * mix(0.30, 1.0, fibre) * 0.85 * high;
         cloudCol = vec3<f32>(1.16, 1.16, 1.14) * clamp(0.80 + 6.0 * f + 0.15 * fibre, 0.0, 1.0);
