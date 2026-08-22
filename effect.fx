@@ -108,8 +108,26 @@ void main(void){
         return;
     }
 
-    vec2 nrm = (vTex - srcOriginStart) / max(srcOriginEnd - srcOriginStart, vec2(1e-6));
-    vec2 layoutPos = mix(layoutStart, layoutEnd, nrm);
+    // Construct does not populate every one of these uniforms on every render
+    // path, and a rectangle that arrives degenerate has to fall back rather than
+    // divide by an epsilon. Dividing by 1e-6 does not guard anything: it scales
+    // the field coordinate by a million, so consecutive pixels land thousands of
+    // noise cells apart, every pixel hashes as its own cell, and the clouds
+    // collapse into single-pixel static. The WebGPU path never hit this because
+    // it uses Construct's own c3_getLayoutPos().
+    vec2 srcSpan = srcOriginEnd - srcOriginStart;
+    vec2 nrm = vTex;
+    if (abs(srcSpan.x) > 1e-4 && abs(srcSpan.y) > 1e-4){
+        nrm = (vTex - srcOriginStart) / srcSpan;
+    }
+
+    // Likewise for the layout rect. Losing it only costs scrolling with the
+    // layout, which is a far better failure than not drawing clouds at all.
+    vec2 layoutSpan = layoutEnd - layoutStart;
+    vec2 layoutPos = nrm * 1000.0;
+    if (abs(layoutSpan.x) > 1e-4 && abs(layoutSpan.y) > 1e-4){
+        layoutPos = layoutStart + layoutSpan * nrm;
+    }
     vec2 wind = vec2(uSpeedX, uSpeedY) * seconds;
     float bob = sin(seconds * 0.35 + uSeed * 3.1) * (0.0025 * clamp(uBob, 0.0, 1.0));
     vec2 basePos = layoutPos + wind;

@@ -4,7 +4,7 @@ Construct 3 effect addon for procedural drifting cloud backgrounds. It supports 
 
 ## Install
 
-Download [`dist/sgtconti_clouds_background-1.2.1.0.c3addon`](dist/sgtconti_clouds_background-1.2.1.0.c3addon)
+Download [`dist/sgtconti_clouds_background-1.2.2.0.c3addon`](dist/sgtconti_clouds_background-1.2.2.0.c3addon)
 (use the **Download raw file** button), then in Construct 3 open *Menu → View →
 Addon Manager → Install new addon* and pick the file. Reload the editor when prompted.
 
@@ -82,6 +82,19 @@ for those pixels.
 
 To reduce cost further in a project: lower `Scale` (fewer, larger cloud features
 alias less), or place the effect on a layer that is not redrawn every frame.
+
+## Renderer consistency
+
+`effect.fx` derives the field coordinate from Construct's source-rect and layout
+uniforms. Construct does not populate all of them on every render path, so both
+rectangles are checked before use and fall back when they arrive degenerate.
+
+Guarding a divide with `max(span, vec2(1e-6))` does not help here: it scales the
+coordinate by a million rather than falling back, so consecutive pixels land
+thousands of noise cells apart, every pixel hashes as its own cell, and the clouds
+collapse into single-pixel static. `effect.wgsl` was never affected because it uses
+Construct's own `c3_getLayoutPos()`, so WebGPU rendered correctly while WebGL did
+not — which is why this surfaced on Linux, where the WebGL path is the common one.
 
 ## Driver consistency
 
