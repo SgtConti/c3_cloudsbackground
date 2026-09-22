@@ -29,12 +29,35 @@ uniform float uSeed;
 uniform vec3 uSkyTop;
 uniform vec3 uSkyBottom;
 uniform float uCloudType;
+uniform float uHorizon;
+uniform float uHorizonY;
 
 mat2 m = mat2(1.6, 1.2, -1.2, 1.6);
 
+// Lattice hash. The usual fract(sin(dot(p, k)) * 43758.5453) needs sin() to stay
+// accurate for arguments in the millions - this field reaches 1e5 immediately and
+// 1e7 after an hour of wind - and drivers range-reduce sin() very differently
+// there. Some collapse it to a handful of values, which turns the cloud field
+// into a static repeating pattern with no structure.
+//
+// This permutation hash uses only exact float arithmetic instead. Every
+// intermediate stays under 2^24, the largest being (2*289*34 + 1) * 2*289 =
+// 1.14e7, so it is bit-identical on every GPU and driver. cos/sin only ever see
+// arguments in [0, 2pi). The cost is that the field repeats every 289 lattice
+// cells - about 150,000 layout px at the default Scale, far past what is visible.
+const float MODULUS = 289.0;
+
+float mod289(float x){ return x - floor(x * (1.0 / MODULUS)) * MODULUS; }
+vec2 mod289(vec2 x){ return x - floor(x * (1.0 / MODULUS)) * MODULUS; }
+float permute(float x){ return mod289(((x * 34.0) + 1.0) * x); }
+
 vec2 hash2(vec2 p){
-    p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
-    return -1.0 + 2.0 * fract(sin(p) * 43758.5453123);
+    vec2 pi = mod289(p);
+    float h = permute(permute(pi.x) + pi.y);
+    float a = h * (6.283185307179586 / MODULUS);
+    // 0.8165 is the RMS length of the old square-distributed gradient, so the
+    // noise keeps the amplitude every cloud type is tuned against.
+    return vec2(cos(a), sin(a)) * 0.8165;
 }
 
 float noise(vec2 p){
@@ -87,8 +110,46 @@ void main(void){
         return;
     }
 
-    vec2 nrm = (vTex - srcOriginStart) / max(srcOriginEnd - srcOriginStart, vec2(1e-6));
-    vec2 layoutPos = mix(layoutStart, layoutEnd, nrm);
+    // Construct does not populate every one of these uniforms on every render
+    // path, and a rectangle that arrives degenerate has to fall back rather than
+    // divide by an epsilon. Dividing by 1e-6 does not guard anything: it scales
+    // the field coordinate by a million, so consecutive pixels land thousands of
+    // noise cells apart, every pixel hashes as its own cell, and the clouds
+    // collapse into single-pixel static. The WebGPU path never hit this because
+    // it uses Construct's own c3_getLayoutPos().
+    vec2 srcSpan = srcOriginEnd - srcOriginStart;
+    vec2 nrm = vTex;
+    if (abs(srcSpan.x) > 1e-4 && abs(srcSpan.y) > 1e-4){
+        nrm = (vTex - srcOriginStart) / srcSpan;
+    }
+
+    // Likewise for the layout rect. Losing it only costs scrolling with the
+    // layout, which is a far better failure than not drawing clouds at all.
+    vec2 layoutSpan = layoutEnd - layoutStart;
+
+    // Perspective toward a horizon line. A row lower in the view looks further
+    // along a flat cloud deck, so it must sample further into the field: the
+    // pattern compresses vertically, spreads from the view centre horizontally,
+    // and - because the wind is still added in field space afterwards - distant
+    // clouds drift across the screen more slowly than overhead ones. Warping the
+    // normalised coordinate rather than the layout position keeps this working
+    // on the fallback path above. Strength 0 leaves the field exactly as it was.
+    vec2 pn = nrm;
+    float horizon = clamp(uHorizon, 0.0, 1.0);
+    float horizonT = 0.0;
+    if (horizon > 0.0){
+        horizonT = clamp(nrm.y / max(clamp(uHorizonY, 0.0, 1.0), 1e-3), 0.0, 1.0);
+        // Capped at ~6x. True perspective is 1/(1-t), whose slope grows far
+        // faster than the curve itself: left uncapped, one screen row near the
+        // horizon spans hundreds of layout px and the far field sparkles.
+        float d = 1.0 / max(1.0 - horizonT * horizon * 0.84, 0.16);
+        pn = vec2((nrm.x - 0.5) * d + 0.5, nrm.y * d);
+    }
+
+    vec2 layoutPos = pn * 1000.0;
+    if (abs(layoutSpan.x) > 1e-4 && abs(layoutSpan.y) > 1e-4){
+        layoutPos = layoutStart + layoutSpan * pn;
+    }
     vec2 wind = vec2(uSpeedX, uSpeedY) * seconds;
     float bob = sin(seconds * 0.35 + uSeed * 3.1) * (0.0025 * clamp(uBob, 0.0, 1.0));
     vec2 basePos = layoutPos + wind;
@@ -172,7 +233,7 @@ void main(void){
         // A closed grey sheet in wide flat layers with no defined cloud edges.
         // Density sets how much light gets through rather than how much of the
         // sky is covered, so the variation stays tonal instead of punching holes.
-        float grain = r - 0.63;
+        float grain = r - 0.698;    // 0.698 is the median of ridged()
         float contrast = mix(0.5, 1.7, contrastN);
         float edge = mix(0.60, 0.24, softness);
         float thin = clamp((f * 5.0 + grain * 0.30) * contrast, -1.5, 1.5);
@@ -188,7 +249,7 @@ void main(void){
         // A power curve leaves the streak ends feathered instead of cut off.
         // Blending env^3 towards env gets the same falloff without a pow().
         env = mix(env * env * env, env, softness);
-        float fibre = clamp((r - 0.45) * mix(0.9, 1.9, contrastN), 0.0, 1.0);
+        float fibre = clamp((r - 0.52) * mix(0.9, 1.9, contrastN), 0.0, 1.0);
         float high = mix(0.72, 1.0, smoothstep(0.95, 0.15, nrm.y));
         cloud = env * mix(0.30, 1.0, fibre) * 0.85 * high;
         cloudCol = vec3(1.16, 1.16, 1.14) * clamp(0.80 + 6.0 * f + 0.15 * fibre, 0.0, 1.0);
@@ -217,7 +278,14 @@ void main(void){
         tintAmt *= mix(0.35, 1.0, lit);
     }
 
+    // Atmospheric haze. Distant cloud washes out toward the sky, which is what
+    // the eye expects of a receding deck and what stops whatever detail survives
+    // the compression from sparkling against the sky.
+    float haze = horizon * smoothstep(0.25, 1.0, horizonT);
+    cloud *= 1.0 - 0.30 * haze;
+
     vec3 result = mix(sky, clamp(tintAmt * sky + cloudCol, 0.0, 1.0), cloud);
+    result = mix(result, sky, 0.85 * haze);
     float outA = cloud * visible;
     gl_FragColor = vec4(mix(base.rgb, result, outA), max(base.a, outA));
 }

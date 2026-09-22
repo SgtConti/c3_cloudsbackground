@@ -66,6 +66,14 @@
           "seed": {
             "name": "Seed",
             "desc": "Offsets the random pattern."
+          },
+          "horizon": {
+            "name": "Horizon",
+            "desc": "Perspective toward a horizon line. 0 keeps the flat field. Higher values compress the clouds toward the horizon, spread them from the view centre, slow distant drift and add haze."
+          },
+          "horizonY": {
+            "name": "Horizon line",
+            "desc": "Where the horizon sits, as a percentage down the view. 100 is the bottom edge. Only has an effect when Horizon is above 0."
           }
         }
       }
