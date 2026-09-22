@@ -29,6 +29,8 @@ uniform float uSeed;
 uniform vec3 uSkyTop;
 uniform vec3 uSkyBottom;
 uniform float uCloudType;
+uniform float uHorizon;
+uniform float uHorizonY;
 
 mat2 m = mat2(1.6, 1.2, -1.2, 1.6);
 
@@ -124,9 +126,29 @@ void main(void){
     // Likewise for the layout rect. Losing it only costs scrolling with the
     // layout, which is a far better failure than not drawing clouds at all.
     vec2 layoutSpan = layoutEnd - layoutStart;
-    vec2 layoutPos = nrm * 1000.0;
+
+    // Perspective toward a horizon line. A row lower in the view looks further
+    // along a flat cloud deck, so it must sample further into the field: the
+    // pattern compresses vertically, spreads from the view centre horizontally,
+    // and - because the wind is still added in field space afterwards - distant
+    // clouds drift across the screen more slowly than overhead ones. Warping the
+    // normalised coordinate rather than the layout position keeps this working
+    // on the fallback path above. Strength 0 leaves the field exactly as it was.
+    vec2 pn = nrm;
+    float horizon = clamp(uHorizon, 0.0, 1.0);
+    float horizonT = 0.0;
+    if (horizon > 0.0){
+        horizonT = clamp(nrm.y / max(clamp(uHorizonY, 0.0, 1.0), 1e-3), 0.0, 1.0);
+        // Capped at ~6x. True perspective is 1/(1-t), whose slope grows far
+        // faster than the curve itself: left uncapped, one screen row near the
+        // horizon spans hundreds of layout px and the far field sparkles.
+        float d = 1.0 / max(1.0 - horizonT * horizon * 0.84, 0.16);
+        pn = vec2((nrm.x - 0.5) * d + 0.5, nrm.y * d);
+    }
+
+    vec2 layoutPos = pn * 1000.0;
     if (abs(layoutSpan.x) > 1e-4 && abs(layoutSpan.y) > 1e-4){
-        layoutPos = layoutStart + layoutSpan * nrm;
+        layoutPos = layoutStart + layoutSpan * pn;
     }
     vec2 wind = vec2(uSpeedX, uSpeedY) * seconds;
     float bob = sin(seconds * 0.35 + uSeed * 3.1) * (0.0025 * clamp(uBob, 0.0, 1.0));
@@ -256,7 +278,14 @@ void main(void){
         tintAmt *= mix(0.35, 1.0, lit);
     }
 
+    // Atmospheric haze. Distant cloud washes out toward the sky, which is what
+    // the eye expects of a receding deck and what stops whatever detail survives
+    // the compression from sparkling against the sky.
+    float haze = horizon * smoothstep(0.25, 1.0, horizonT);
+    cloud *= 1.0 - 0.30 * haze;
+
     vec3 result = mix(sky, clamp(tintAmt * sky + cloudCol, 0.0, 1.0), cloud);
+    result = mix(result, sky, 0.85 * haze);
     float outA = cloud * visible;
     gl_FragColor = vec4(mix(base.rgb, result, outA), max(base.a, outA));
 }

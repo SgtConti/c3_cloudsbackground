@@ -20,7 +20,9 @@ struct ShaderParams {
     skyTop: vec3<f32>,
     _pad0: f32,
     skyBottom: vec3<f32>,
-    cloudType: f32
+    cloudType: f32,
+    horizon: f32,
+    horizonY: f32
 };
 
 %%SAMPLERFRONT_BINDING%% var samplerFront: sampler;
@@ -116,7 +118,26 @@ fn main(input: FragmentInput) -> FragmentOutput {
     }
 
     let nrm = c3_srcOriginToNorm(input.fragUV);
-    let layoutPos = c3_getLayoutPos(input.fragUV);
+
+    // Perspective toward a horizon line. A row lower in the view looks further
+    // along a flat cloud deck, so it must sample further into the field: the
+    // pattern compresses vertically, spreads from the view centre horizontally,
+    // and - because the wind is still added in field space afterwards - distant
+    // clouds drift across the screen more slowly than overhead ones. Strength 0
+    // leaves the field exactly as it was.
+    let horizon = clamp(shaderParams.horizon, 0.0, 1.0);
+    var horizonT = 0.0;
+    var layoutPos = c3_getLayoutPos(input.fragUV);
+    if (horizon > 0.0) {
+        horizonT = clamp(nrm.y / max(clamp(shaderParams.horizonY, 0.0, 1.0), 1e-3), 0.0, 1.0);
+        // Capped at ~6x. True perspective is 1/(1-t), whose slope grows far
+        // faster than the curve itself: left uncapped, one screen row near the
+        // horizon spans hundreds of layout px and the far field sparkles.
+        let d = 1.0 / max(1.0 - horizonT * horizon * 0.84, 0.16);
+        let pn = vec2<f32>((nrm.x - 0.5) * d + 0.5, nrm.y * d);
+        let layoutSpan = c3Params.layoutEnd - c3Params.layoutStart;
+        layoutPos = c3Params.layoutStart + layoutSpan * pn;
+    }
     let wind = vec2<f32>(shaderParams.speedX, shaderParams.speedY) * c3Params.seconds;
     let bob = sin(c3Params.seconds * 0.35 + shaderParams.seed * 3.1) * (0.0025 * clamp(shaderParams.bob, 0.0, 1.0));
     let basePos = layoutPos + wind;
@@ -245,7 +266,14 @@ fn main(input: FragmentInput) -> FragmentOutput {
         tintAmt = tintAmt * mix(0.35, 1.0, lit);
     }
 
-    let result = mix(sky, clamp(tintAmt * sky + cloudCol, vec3<f32>(0.0), vec3<f32>(1.0)), cloud);
+    // Atmospheric haze. Distant cloud washes out toward the sky, which is what
+    // the eye expects of a receding deck and what stops whatever detail survives
+    // the compression from sparkling against the sky.
+    let haze = horizon * smoothstep(0.25, 1.0, horizonT);
+    cloud = cloud * (1.0 - 0.30 * haze);
+
+    var result = mix(sky, clamp(tintAmt * sky + cloudCol, vec3<f32>(0.0), vec3<f32>(1.0)), cloud);
+    result = mix(result, sky, 0.85 * haze);
     let outA = cloud * visible;
     output.color = vec4<f32>(mix(base.rgb, result, outA), max(base.a, outA));
     return output;

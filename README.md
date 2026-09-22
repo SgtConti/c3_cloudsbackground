@@ -4,7 +4,7 @@ Construct 3 effect addon for procedural drifting cloud backgrounds. It supports 
 
 ## Install
 
-Download [`dist/sgtconti_clouds_background-1.2.2.0.c3addon`](dist/sgtconti_clouds_background-1.2.2.0.c3addon)
+Download [`dist/sgtconti_clouds_background-1.3.0.0.c3addon`](dist/sgtconti_clouds_background-1.3.0.0.c3addon)
 (use the **Download raw file** button), then in Construct 3 open *Menu → View →
 Addon Manager → Install new addon* and pick the file. Reload the editor when prompted.
 
@@ -60,6 +60,28 @@ between weather states instead.
 | Only on transparent | `0` renders the full rectangle. `100` renders only where the foreground layer/object is transparent. |
 | Seed | Offsets the random pattern. |
 | Cloud type | `0` cumulus, `1` altostratus, `2` cirrus, `3` cumulonimbus. |
+| Horizon | Perspective toward a horizon line. `0` keeps the flat field. |
+| Horizon line | Where the horizon sits, as a percentage down the view. |
+
+## Horizon
+
+By default the cloud field is orthographic: a cloud is the same size at the top of
+the view as it is at the bottom. **Horizon** adds perspective, treating the field as
+a flat deck seen from below. A row lower in the view looks further along that deck,
+so it samples further into the field: the pattern compresses vertically, spreads out
+from the view centre horizontally, and — because the wind is still applied in field
+space afterwards — distant clouds drift across the screen more slowly than overhead
+ones. **Horizon line** places the vanishing row, which matters when terrain covers
+the lower part of the view.
+
+Two details are deliberate. The compression is capped at about 6x: true perspective
+is `1/(1-t)`, whose slope grows much faster than the curve itself, and left uncapped
+a single screen row near the horizon spans hundreds of layout px, far above the pixel
+rate — the far field turns to sparkle. Haze is then blended in toward the horizon,
+which is what a receding deck looks like anyway and which collapses the contrast of
+whatever detail does survive the compression.
+
+At `Horizon` 0 the field is byte-for-byte what it was before the parameter existed.
 
 ## Performance notes
 
